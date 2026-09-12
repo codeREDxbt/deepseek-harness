@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
-  IconBranchOutline16, IconCheckOutline16, IconCopyOutline16, Tooltip, writeClipboard,
+  IconBranchOutline16, IconCheckOutline16, IconCopyOutline16, IconRefreshOutline16, Tooltip, writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { formatLatencySeconds, formatMessageClock, formatRunDuration, formatTokensPerSecond } from './message-chrome.ts'
@@ -27,6 +27,10 @@ export interface MessageIconActionsProps {
   onBranch?: (() => void) | undefined
   /** The message is not a completed transcript tail, so branch stays visible but unavailable. */
   branchUnavailable?: boolean | undefined
+  /** Rewind the session to before this message; omission hides the rewind action. */
+  onRewind?: (() => void) | undefined
+  /** Whether rewind is unavailable in this state. */
+  rewindUnavailable?: boolean | undefined
   /** Parent layout class composed onto the actions row. */
   className?: string | undefined
   /**
@@ -44,11 +48,12 @@ export interface MessageIconActionsProps {
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, time, runMs, ttftMs, tokensPerSecond, clock, onBranch, branchUnavailable = false, className,
-  extraActions, t,
+  text, time, runMs, ttftMs, tokensPerSecond, clock, onBranch, branchUnavailable = false,
+  onRewind, rewindUnavailable = false, className, extraActions, t,
 }: MessageIconActionsProps) {
   const day = useCalendarDay()
   const reasonId = useId()
+  const rewindReasonId = useId()
   // Same success chrome as CodeBlock: a short check swap after the write,
   // gated so re-clicks during the window neither re-copy nor stack timers.
   const [copied, setCopied] = useState(false)
@@ -116,6 +121,24 @@ export function MessageIconActions({
         </button>
       </Tooltip>
       {extraActions}
+      {onRewind !== undefined && (
+        <Tooltip label={rewindUnavailable ? t('message.rewindUnavailable') : t('message.rewind')} side="bottom">
+          <button
+            type="button"
+            className={css.action}
+            aria-label={t('message.rewind')}
+            aria-disabled={rewindUnavailable || undefined}
+            aria-describedby={rewindUnavailable ? rewindReasonId : undefined}
+            data-unavailable={rewindUnavailable || undefined}
+            onClick={rewindUnavailable ? undefined : onRewind}
+          >
+            <IconRefreshOutline16 />
+          </button>
+        </Tooltip>
+      )}
+      {onRewind !== undefined && rewindUnavailable && (
+        <span id={rewindReasonId} className={css.visuallyHidden}>{t('message.rewindUnavailable')}</span>
+      )}
       {onBranch !== undefined && (
         <Tooltip label={branchUnavailable ? t('message.branchUnavailable') : t('message.branch')} side="bottom">
           {/* Native disabled buttons do not deliver the hover/focus events Tooltip needs. */}

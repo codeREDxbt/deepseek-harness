@@ -79,7 +79,7 @@ function turnProcessLayout(
 /** Subscribe, apply Turn-process visibility, and dispatch one stable Context key. */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
   nodeKey, historyIncomplete, compactTranscript,
-  selectedCallId, cwd, openFile, inspectCall, forkAt,
+  selectedCallId, cwd, openFile, inspectCall, forkAt, rewindAt,
   renderMessageImages, fileMentions, useChat, useStore, actions, renderSlot, t,
 }: ChatNodeSeatProps) {
   const node = useChat(snapshot => snapshot.nodes.get(nodeKey))
@@ -181,11 +181,12 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       openFile,
       inspectCall,
       forkAt,
+      rewindAt,
       renderMessageImages,
       fileMentions,
       turnProcess,
     }, [
-    node, selectedCallId, cwd, openFile, inspectCall, forkAt,
+    node, selectedCallId, cwd, openFile, inspectCall, forkAt, rewindAt,
     renderMessageImages, fileMentions, turnProcess,
   ])
   if (routedNode === undefined || owner === null) return null

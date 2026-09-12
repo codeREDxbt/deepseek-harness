@@ -2,7 +2,7 @@
 /** Chat inject factories exercised over independently mounted Conversation and Chat plugins. */
 import { describe, expect, it, vi } from 'vitest'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
-import type { ISession } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ISession, SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-controller/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import {
   SlotTestRuntime, TestRemote, stubSettingsScope, usePinnedBrowserLanguages,
@@ -10,7 +10,7 @@ import {
 import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import {
-  apply as applyConversation, inject as injectConversation,
+  apply as applyConversation, inject as injectConversation, type IConversation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
   apply as applyChat, inject as injectChat, type ChatViewInjected, type DetailsInjected,
@@ -105,6 +105,75 @@ describe('Chat inject API', () => {
     await vi.waitFor(() => {
       expect(fork).toHaveBeenCalledWith({ sessionId: ROOT, atSeq: 18, increaseTitle: true })
     })
+    await b.runtime.dispose()
+  })
+
+  it('rewinds turn 1 by creating a fresh session and restoring the draft', async () => {
+    const b = await bench()
+    const NEW_SESSION = 'new-session-1' as SessionId
+    await b.runtime.sessions.add({
+      id: NEW_SESSION,
+      summary: { title: 'N', displayTitle: 'N', cwd: '/proj' },
+      session: sessionFakeFor(),
+    }, { current: false })
+    b.runtime.sessions.stubCreate(vi.fn(async () => NEW_SESSION))
+
+    const { injected } = b.chatViewApi(ROOT)
+    injected.rewindAt(1, 'my draft message')
+
+    await vi.waitFor(() => {
+      expect(b.runtime.sessions.calls).toContainEqual({ method: 'open', args: [NEW_SESSION] })
+    })
+    expect(b.runtime.sessions.calls).toContainEqual({
+      method: 'create', args: [{ cwd: '/proj' }],
+    })
+    const childScope = b.runtime.sessions.scope(NEW_SESSION)
+    expect(childScope).toBeDefined()
+    const conv = b.runtime.ctx.get('conversation') as IConversation | undefined
+    expect(conv?.input.for(childScope!).state.getSnapshot().draft).toBe('my draft message')
+    await b.runtime.dispose()
+  })
+
+  it('rewinds later turn by forking at the previous turn boundary and restoring the draft', async () => {
+    const b = await bench()
+    const FORKED_SESSION = 'forked-session-1' as SessionId
+    await b.runtime.sessions.add({
+      id: FORKED_SESSION,
+      summary: { title: 'F', displayTitle: 'F', cwd: '/proj' },
+      session: sessionFakeFor(),
+    }, { current: false })
+    const fork = vi.spyOn(b.runtime.sessions, 'fork').mockResolvedValue(FORKED_SESSION)
+
+    await b.runtime.sessions.appendEvent(ROOT, {
+      type: 'event',
+      event: {
+        type: 'turn/start',
+        seq: 1,
+        time: 1000,
+        data: { turn: 1 },
+      } as SessionLiveEventEntry['event'],
+    })
+    await b.runtime.sessions.appendEvent(ROOT, {
+      type: 'event',
+      event: {
+        type: 'turn/end',
+        seq: 10,
+        time: 2000,
+        data: { turn: 1, reason: { kind: 'completed' } },
+      } as SessionLiveEventEntry['event'],
+    })
+
+    const { injected } = b.chatViewApi(ROOT)
+    injected.rewindAt(2, 'turn 2 draft text')
+
+    await vi.waitFor(() => {
+      expect(b.runtime.sessions.calls).toContainEqual({ method: 'open', args: [FORKED_SESSION] })
+    })
+    expect(fork).toHaveBeenCalledWith({ sessionId: ROOT, atSeq: 10, increaseTitle: true })
+    const childScope = b.runtime.sessions.scope(FORKED_SESSION)
+    expect(childScope).toBeDefined()
+    const conv = b.runtime.ctx.get('conversation') as IConversation | undefined
+    expect(conv?.input.for(childScope!).state.getSnapshot().draft).toBe('turn 2 draft text')
     await b.runtime.dispose()
   })
 

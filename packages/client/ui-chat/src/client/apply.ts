@@ -8,7 +8,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 // Type-only service and declaration merges used by the apply world.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { IConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
@@ -142,6 +142,43 @@ export function apply(ctx: Context): void {
               .catch(() => {
                 // Fork or child-title failure leaves the source view unchanged.
               })
+          },
+          rewindAt: (turnNum, draftText) => {
+            const binding = ctx.sessions.binding(sessionId)
+            const currentSnapshot = binding === undefined ? undefined : chatSource(binding).getSnapshot()
+            const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+            const prevTurn = (turnNum > 1 && currentSnapshot !== undefined)
+              ? currentSnapshot.timeline.turns.get(turnNum - 1)
+              : undefined
+            const prevSeq = prevTurn?.end?.seq ?? prevTurn?.start?.seq
+
+            const openWithDraft = (childId: SessionId) => {
+              const actx = ctx.sessions.scope(childId)
+              if (actx && draftText !== undefined && draftText !== '') {
+                try {
+                  const conv = ctx.get('conversation') as IConversation | undefined
+                  conv?.input.for(actx).setDraft(draftText)
+                } catch {
+                  // Non-fatal if draft could not be set
+                }
+              }
+              ctx.sessions.open(childId)
+            }
+
+            if (prevSeq !== undefined) {
+              ctx.sessions.fork({ sessionId, atSeq: prevSeq, increaseTitle: true })
+                .then(openWithDraft)
+                .catch(() => {
+                  // Fork or child-title failure leaves the source view unchanged.
+                })
+            } else {
+              const createOpts = cwd !== undefined ? { cwd } : undefined
+              ctx.sessions.create(createOpts)
+                .then(openWithDraft)
+                .catch(() => {
+                  // Create failure leaves the source view unchanged.
+                })
+            }
           },
         }
       },

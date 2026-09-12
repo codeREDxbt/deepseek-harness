@@ -18,6 +18,7 @@ import {
 } from '../src/client/chat/MessageItem.tsx'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { StatsLine } from '../src/client/chat/StatsLine.tsx'
+import { MessageIconActions } from '../src/client/chat/MessageIconActions.tsx'
 import { zh } from '../src/client/locale.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
@@ -159,6 +160,57 @@ describe('MessageItem arms', () => {
     expect(screen.queryByRole('button', { name: '编辑' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '复制' }))
     expect(writeText).toHaveBeenCalledWith('hello bubble')
+  })
+
+  it('user bubbles expose rewind button when rewindAt is provided and clicks invoke rewindAt', () => {
+    const rewindAt = vi.fn()
+    const viewNode: ChatConversationViewNode = {
+      key: 'fixture:user:1',
+      kind: 'user',
+      id: '1',
+      target: 'chat',
+      anchorSeq: 1,
+      location: {
+        kind: 'turn',
+        turn: { turn: 2, status: 'closed', data: new Map() } as never,
+      },
+      visibility: 'visible',
+      data: {
+        kind: 'user',
+        seq: 1,
+        time: 1_000,
+        content: [{ type: 'text', text: 'prompt to rewind' }] as never,
+        source: null,
+      },
+    }
+    const props = {
+      node: viewNode,
+      t,
+      renderMessageImages,
+      rewindAt,
+    } as unknown as React.ComponentProps<typeof UserMessageNodeView>
+    render(<UserMessageNodeView {...props} />)
+    const rewindBtn = screen.getByRole('button', { name: '回退至此消息' })
+    expect(rewindBtn).toBeTruthy()
+    fireEvent.click(rewindBtn)
+    expect(rewindAt).toHaveBeenCalledWith(2, 'prompt to rewind')
+  })
+
+  it('MessageIconActions disables rewind button when rewindUnavailable is true', () => {
+    const onRewind = vi.fn()
+    render(
+      <MessageIconActions
+        text="some prompt"
+        clock="start"
+        t={t}
+        onRewind={onRewind}
+        rewindUnavailable={true}
+      />,
+    )
+    const rewindBtn = screen.getByRole('button', { name: '回退至此消息' })
+    expect(rewindBtn.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(rewindBtn)
+    expect(onRewind).not.toHaveBeenCalled()
   })
 
   it('user copy falls back to execCommand when clipboard.writeText is unavailable', () => {
