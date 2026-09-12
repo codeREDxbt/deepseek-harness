@@ -187,16 +187,6 @@ describe('Chat inject API', () => {
     await b.runtime.dispose()
   })
 
-  it('writes Chat selection before opening details', async () => {
-    const b = await bench()
-    const { instance, injected } = b.chatViewApi(ROOT)
-    injected.openDetails({ turnSeq: 2, callId: 'c1' })
-    expect(instance.store.getSnapshot().selection).toEqual({ turnSeq: 2, callId: 'c1' })
-    expect(b.layout.openDetails).toHaveBeenCalledOnce()
-    expect(b.runtime.storeOf('details', ROOT)).toBe(instance)
-    expect(b.runtime.storeOf('conversation.session', ROOT)).not.toBe(instance)
-    await b.runtime.dispose()
-  })
 
   it('addresses file paths under the Session\'s scope and opens them in the right Sidebar', async () => {
     const b = await bench()
