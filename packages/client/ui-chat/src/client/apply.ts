@@ -165,13 +165,15 @@ export function apply(ctx: Context): void {
           rewindAt: (turnNum, draftText) => {
             const binding = ctx.sessions.binding(sessionId)
             const currentSnapshot = binding === undefined ? undefined : chatSource(binding).getSnapshot()
-            const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+            const sourceSession = ctx.sessions.list.getSnapshot().byId[sessionId]
+            const sourceTitle = sourceSession?.title
+            const cwd = sourceSession?.cwd
             const prevTurn = (turnNum > 1 && currentSnapshot !== undefined)
               ? currentSnapshot.timeline.turns.get(turnNum - 1)
               : undefined
             const prevSeq = prevTurn?.end?.seq ?? prevTurn?.start?.seq
 
-            const openWithDraft = (childId: SessionId) => {
+            const openWithDraft = async (childId: SessionId) => {
               const actx = ctx.sessions.scope(childId)
               if (actx && draftText !== undefined && draftText !== '') {
                 try {
@@ -181,11 +183,33 @@ export function apply(ctx: Context): void {
                   // Non-fatal if draft could not be set
                 }
               }
+              if (sourceTitle !== undefined && sourceTitle !== '') {
+                try {
+                  await ctx.sessions.binding(childId)?.session.rename(sourceTitle)
+                } catch {
+                  // Non-fatal if child rename fails
+                }
+              }
               ctx.sessions.open(childId)
+              try {
+                const uiWorkspace = ctx.get('uiWorkspace') as {
+                  archiveSession?: (id: SessionId) => Promise<void>
+                } | undefined
+                if (uiWorkspace?.archiveSession) {
+                  await uiWorkspace.archiveSession(sessionId)
+                } else {
+                  const workspaces = ctx.get('workspaces') as {
+                    archiveSession?: (id: SessionId) => Promise<void>
+                  } | undefined
+                  await workspaces?.archiveSession?.(sessionId)
+                }
+              } catch {
+                // Non-fatal if archiving prior session fails
+              }
             }
 
             if (prevSeq !== undefined) {
-              ctx.sessions.fork({ sessionId, atSeq: prevSeq, increaseTitle: true })
+              ctx.sessions.fork({ sessionId, atSeq: prevSeq, increaseTitle: false })
                 .then(openWithDraft)
                 .catch(() => {
                   // Fork or child-title failure leaves the source view unchanged.

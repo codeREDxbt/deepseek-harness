@@ -57,12 +57,14 @@ async function bench() {
     () => Promise.resolve({ ok: true, value: { opened: true } }),
   )
   new TestRemote(runtime.ctx, { session: { openWorkspacePath } })
+  const archiveSession = vi.fn(async () => {})
   runtime.ctx.provide('uiWorkspace', {
     openWorkspace: vi.fn(async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => {
       beforeOpen(ROOT)
       runtime.sessions.open(ROOT)
     }),
     openSession: (id: SessionId) => { runtime.sessions.open(id) },
+    archiveSession,
   } as never)
   const session = sessionFakeFor()
   await runtime.sessions.add({
@@ -179,7 +181,11 @@ describe('Chat inject API', () => {
     await vi.waitFor(() => {
       expect(b.runtime.sessions.calls).toContainEqual({ method: 'open', args: [FORKED_SESSION] })
     })
-    expect(fork).toHaveBeenCalledWith({ sessionId: ROOT, atSeq: 10, increaseTitle: true })
+    expect(fork).toHaveBeenCalledWith({ sessionId: ROOT, atSeq: 10, increaseTitle: false })
+    const uiWorkspace = b.runtime.ctx.get('uiWorkspace') as { archiveSession?: ReturnType<typeof vi.fn> } | undefined
+    await vi.waitFor(() => {
+      expect(uiWorkspace?.archiveSession).toHaveBeenCalledWith(ROOT)
+    })
     const childScope = b.runtime.sessions.scope(FORKED_SESSION)
     expect(childScope).toBeDefined()
     const conv = b.runtime.ctx.get('conversation') as IConversation | undefined

@@ -468,6 +468,19 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('gone-s')).toBeNull()
   })
 
+  it('deletes a session from the row menu via delete session item', async () => {
+    const archiveSession = vi.fn(async () => {})
+    mount({
+      useSessions: hook(sessionState([summary('del-s', 1)])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['del-s'])])),
+      archiveSession,
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    fireEvent.click(screen.getByRole('button', { name: '会话“del-s”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '删除会话' }))
+    expect(archiveSession).toHaveBeenCalledWith(sid('del-s'))
+  })
+
   it('logs and keeps the tree when the archive call rejects', async () => {
     const rejection = new Error('archive exploded')
     const archiveSession = vi.fn(async () => { throw rejection })
